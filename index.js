@@ -59,6 +59,8 @@ const cleanFrontendUrl = rawFrontendUrl.endsWith('/') ? rawFrontendUrl.slice(0, 
 const allowedOrigins = [
   cleanFrontendUrl,
   'https://cent-stores.vercel.app',
+  'https://cent-store-storefront.vercel.app',
+  'https://cent-store-erp.vercel.app',
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5175',
@@ -71,7 +73,6 @@ app.use(cors({
     if (!origin) return callback(null, true);
     
     const isAllowed = allowedOrigins.includes(origin) || 
-                      origin.endsWith('.vercel.app') ||
                       origin.startsWith('http://localhost:');
                       
     if (isAllowed) {
