@@ -12,9 +12,10 @@ import {
   downloadPayslip,
   submitLeaveRequest,
   getLeaveRequests,
-  reviewLeaveRequest
+  reviewLeaveRequest,
+  approveAttendance
 } from '../controllers/hcmController.js';
-import { protectStaff, authorizePermissions } from '../middleware/erpAuth.js';
+import { protectStaff, authorizeRoles, authorizePermissions } from '../middleware/erpAuth.js';
 
 const router = express.Router();
 
@@ -39,6 +40,8 @@ router.post('/attendance/clock-out', (req, res, next) => {
   req.body.action = 'clockOut';
   next();
 }, clockAttendance);
+router.patch('/attendance/:id/approve', authorizeRoles('CEO', 'HR'), approveAttendance);
+router.put('/attendance/:id/approve', authorizeRoles('CEO', 'HR'), approveAttendance);
 
 // --- PAYROLL ENDPOINTS ---
 router.post('/payroll/generate', authorizePermissions('staff:manage', 'payroll:write', 'admin'), generatePayroll);
@@ -47,9 +50,9 @@ router.get('/payroll', getPayrollRecords);
 router.get('/payroll/:id/payslip', getPayslip);
 router.get('/payroll/:id/download-payslip', downloadPayslip);
 
-export default router;
-
 // --- LEAVE MANAGEMENT ---
 router.post('/leave', submitLeaveRequest);
 router.get('/leave', getLeaveRequests);
 router.put('/leave/:id/review', authorizePermissions('staff:manage', 'admin'), reviewLeaveRequest);
+
+export default router;

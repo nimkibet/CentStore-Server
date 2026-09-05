@@ -38,7 +38,6 @@ const accountSchema = new Schema(
   }
 );
 
-accountSchema.index({ code: 1 });
 accountSchema.index({ type: 1 });
 
 const Account = mongoose.model('Account', accountSchema);

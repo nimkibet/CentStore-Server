@@ -96,6 +96,9 @@ const productSchema = new mongoose.Schema({
 productSchema.index({ category: 1 });
 productSchema.index({ status: 1 });
 productSchema.index({ isFlashSale: 1 });
+productSchema.index({ stock: 1 });
+productSchema.index({ createdAt: -1 });
+productSchema.index({ status: 1, stock: 1 });
 
 // Synchronize title and name
 productSchema.pre('save', function(next) {

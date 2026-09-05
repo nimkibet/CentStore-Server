@@ -28,17 +28,17 @@ router.post('/auth/login', loginStaff);
 // --- PROTECTED AUTH ROUTE ---
 router.get('/auth/me', protectStaff, getStaffProfile);
 
-// --- STAFF MANAGEMENT (CEO ONLY) ---
-router.get('/staff', protectStaff, authorizeRoles('CEO'), getAllStaff);
-router.post('/staff', protectStaff, authorizeRoles('CEO'), createStaff);
-router.put('/staff/:id', protectStaff, authorizeRoles('CEO'), updateStaff);
-router.delete('/staff/:id', protectStaff, authorizeRoles('CEO'), deleteStaff);
+// --- STAFF MANAGEMENT (CEO & HR) ---
+router.get('/staff', protectStaff, authorizeRoles('CEO', 'HR'), getAllStaff);
+router.post('/staff', protectStaff, authorizeRoles('CEO', 'HR'), createStaff);
+router.put('/staff/:id', protectStaff, authorizeRoles('CEO', 'HR'), updateStaff);
+router.delete('/staff/:id', protectStaff, authorizeRoles('CEO', 'HR'), deleteStaff);
 
 // --- INVENTORY / PRODUCTS ---
 // Read inventory (CEO, Finance, Cashier, WebAdmin)
 router.get('/products', protectStaff, authorizeRoles('CEO', 'Finance', 'Cashier', 'WebAdmin'), getErpProducts);
-// Add product (CEO, WebAdmin) - enforces Trial Limit of 10 products
-router.post('/products', protectStaff, authorizeRoles('CEO', 'WebAdmin'), checkTrialLimit, upload.single('image'), createErpProduct);
+// Add product (CEO, WebAdmin) - unblocked without artificial 10 cap
+router.post('/products', protectStaff, authorizeRoles('CEO', 'WebAdmin'), upload.single('image'), createErpProduct);
 // Edit product (CEO, WebAdmin)
 router.put('/products/:id', protectStaff, authorizeRoles('CEO', 'WebAdmin'), upload.single('image'), updateErpProduct);
 // Delete product (CEO, WebAdmin)
@@ -47,6 +47,7 @@ router.delete('/products/:id', protectStaff, authorizeRoles('CEO', 'WebAdmin'), 
 // --- POS SALES TERMINAL ---
 // Create POS sale (CEO, Cashier)
 router.post('/pos', protectStaff, authorizeRoles('CEO', 'Cashier'), createPOSSale);
+router.post('/pos/sale', protectStaff, authorizeRoles('CEO', 'Cashier'), createPOSSale);
 
 // --- ORDERS FEED ---
 // Get orders list (CEO, Finance, Cashier, WebAdmin)

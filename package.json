@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node --env-file=.env index.js",
     "dev": "node --env-file=.env index.js",
+    "test": "node --test ../tests/e2e/r1_attendance.test.js ../tests/e2e/r2_user_management.test.js ../tests/e2e/r4_stock_decrement.test.js ../tests/e2e/r5_dashboard_optimization.test.js",
     "data:import": "node seeder.js",
     "data:destroy": "node seeder.js -d"
   },

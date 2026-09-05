@@ -37,6 +37,19 @@ const attendanceSchema = new Schema({
     type: String,
     trim: true,
     default: ''
+  },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
+    index: true
+  },
+  approvedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'Staff'
+  },
+  approvedAt: {
+    type: Date
   }
 }, {
   timestamps: true

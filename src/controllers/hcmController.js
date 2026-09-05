@@ -132,17 +132,8 @@ export const createHcmStaff = async (req, res) => {
     const result = newStaff.toObject();
     delete result.password;
 
-    
-      const totalGross       = generatedRecords.reduce((s, p) => s + (p.grossSalary || 0), 0);
-      const totalNet         = generatedRecords.reduce((s, p) => s + (p.netSalary || 0), 0);
-      const totalPAYE        = generatedRecords.reduce((s, p) => s + (p.deductions?.paye || 0), 0);
-      const totalNSSF        = generatedRecords.reduce((s, p) => s + (p.deductions?.nssf || 0), 0);
-      const totalSHIF        = generatedRecords.reduce((s, p) => s + (p.deductions?.shif || 0), 0);
-      const totalHousingLevy = generatedRecords.reduce((s, p) => s + (p.deductions?.housingLevy || 0), 0);
-      
-      createPayrollJournalEntry({ period: payPeriod, totalGross, totalNet, totalPAYE, totalNSSF, totalSHIF, totalHousingLevy });
-      
-      res.status(201).json({
+    res.status(201).json({
+      success: true,
       message: 'Staff HR profile created successfully',
       staff: result
     });
@@ -207,14 +198,17 @@ export const clockAttendance = async (req, res) => {
         date: now,
         clockIn: now,
         status,
+        approvalStatus: 'pending',
         totalHours: 0,
         notes: notes || ''
       });
 
       await newAttendance.save();
       return res.status(201).json({
+        success: true,
         message: 'Clock-in successful',
-        attendance: newAttendance
+        attendance: newAttendance,
+        record: newAttendance
       });
     } else {
       if (!activeSession) {
@@ -233,8 +227,10 @@ export const clockAttendance = async (req, res) => {
 
       await activeSession.save();
       return res.json({
+        success: true,
         message: 'Clock-out successful',
-        attendance: activeSession
+        attendance: activeSession,
+        record: activeSession
       });
     }
   } catch (err) {
@@ -244,23 +240,61 @@ export const clockAttendance = async (req, res) => {
 
 export const getAttendance = async (req, res) => {
   try {
-    const { staffId, startDate, endDate } = req.query;
+    const { staffId, startDate, endDate, approvalStatus } = req.query;
     const query = {};
 
     if (staffId) query.staffId = staffId;
+    if (approvalStatus) query.approvalStatus = approvalStatus;
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate );
-      if (endDate) query.date.$lte = new Date(endDate );
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) query.date.$lte = new Date(endDate);
     }
 
     const records = await Attendance.find(query)
       .populate('staffId', 'name email department position')
+      .populate('approvedBy', 'name email role')
       .sort({ date: -1, clockIn: -1 });
 
     res.json(records);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch attendance records: ' + err.message });
+  }
+};
+
+export const approveAttendance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, notes } = req.body;
+
+    const approvalStatus = status || 'approved';
+    if (!['approved', 'rejected', 'pending'].includes(approvalStatus)) {
+      return res.status(400).json({ error: 'Invalid approval status. Must be approved, rejected, or pending' });
+    }
+
+    const attendance = await Attendance.findById(id);
+    if (!attendance) {
+      return res.status(404).json({ error: 'Attendance record not found' });
+    }
+
+    attendance.approvalStatus = approvalStatus;
+    attendance.approvedBy = req.staff?._id;
+    attendance.approvedAt = new Date();
+    if (notes) {
+      attendance.notes = attendance.notes ? `${attendance.notes} | ${notes}` : notes;
+    }
+
+    await attendance.save();
+    await attendance.populate('staffId', 'name email department position');
+    await attendance.populate('approvedBy', 'name email role');
+
+    return res.json({
+      success: true,
+      message: `Attendance marked as ${approvalStatus}`,
+      record: attendance
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to update attendance approval status: ' + err.message });
   }
 };
 

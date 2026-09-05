@@ -260,7 +260,7 @@ export const runSeeder = async () => {
       // Check cache first
       if (fs.existsSync(localPath)) {
         console.log(`  -> Found locally cached file: ${safeFilename}`);
-        imageDownloaded = True;
+        imageDownloaded = true;
       } else {
         // Try searching Bing Images
         const searchQuery = `${brand} ${model} phone white background`;

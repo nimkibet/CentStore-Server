@@ -82,7 +82,6 @@ const journalEntrySchema = new Schema(
   }
 );
 
-journalEntrySchema.index({ entryNumber: 1 });
 journalEntrySchema.index({ date: -1 });
 
 const JournalEntry = mongoose.model('JournalEntry', journalEntrySchema);

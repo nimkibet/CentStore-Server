@@ -71,7 +71,8 @@ app.use(cors({
     if (!origin) return callback(null, true);
     
     const isAllowed = allowedOrigins.includes(origin) || 
-                      origin.endsWith('.vercel.app');
+                      origin.endsWith('.vercel.app') ||
+                      origin.startsWith('http://localhost:');
                       
     if (isAllowed) {
       callback(null, true);
@@ -227,17 +228,45 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
+// GET: Fetch single product by numeric id or Mongo ObjectId
+app.get('/api/products/:id', async (req, res) => {
+  try {
+    const paramId = req.params.id;
+    let product = null;
+
+    if (mongoose.isValidObjectId(paramId)) {
+      product = await Product.findOne({
+        $or: [{ _id: paramId }, { id: isNaN(paramId) ? null : Number(paramId) }]
+      });
+    } else if (!isNaN(paramId)) {
+      product = await Product.findOne({ id: Number(paramId) });
+    } else {
+      product = await Product.findOne({ id: paramId });
+    }
+
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch product: ' + err.message });
+  }
+});
+
 // POST: Add new product
 app.post('/api/products', async (req, res) => {
   try {
     const price = Number(req.body.price) || 0;
     const originalPrice = Number(req.body.originalPrice) || price;
     const discountPercentage = originalPrice > 0 ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
+    const stock = req.body.stock !== undefined ? Math.max(0, parseInt(req.body.stock, 10)) : 10;
 
     const newProduct = new Product({
       id: req.body.id || Date.now(),
       title: req.body.title || 'Untitled Device',
+      name: req.body.name || req.body.title || 'Untitled Device',
       price: price,
+      costPrice: Number(req.body.costPrice) || 0,
       originalPrice: originalPrice,
       discountPercentage: discountPercentage,
       rating: Number(req.body.rating) || 5.0,
@@ -245,6 +274,7 @@ app.post('/api/products', async (req, res) => {
       brand: req.body.brand || 'Generic',
       category: req.body.category || 'Premium Accessories',
       storage: req.body.storage || 'Standard',
+      stock: stock,
       note: req.body.note || 'Available',
       isFlashSale: req.body.isFlashSale === true || false,
       description: req.body.description || ''
@@ -260,12 +290,20 @@ app.post('/api/products', async (req, res) => {
 // PUT: Update product
 app.put('/api/products/:id', async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const paramId = req.params.id;
+    const query = mongoose.isValidObjectId(paramId)
+      ? { $or: [{ _id: paramId }, { id: isNaN(paramId) ? null : Number(paramId) }] }
+      : { id: isNaN(paramId) ? paramId : Number(paramId) };
+
     const updates = { ...req.body };
+
+    if (updates.stock !== undefined) {
+      updates.stock = Math.max(0, parseInt(updates.stock, 10));
+    }
 
     // If price details changed, recalculate discount
     if (req.body.price !== undefined || req.body.originalPrice !== undefined) {
-      const dbProduct = await Product.findOne({ id });
+      const dbProduct = await Product.findOne(query);
       if (dbProduct) {
         const price = req.body.price !== undefined ? Number(req.body.price) : dbProduct.price;
         const originalPrice = req.body.originalPrice !== undefined ? Number(req.body.originalPrice) : dbProduct.originalPrice;
@@ -273,7 +311,7 @@ app.put('/api/products/:id', async (req, res) => {
       }
     }
 
-    const updated = await Product.findOneAndUpdate({ id }, updates, { new: true });
+    const updated = await Product.findOneAndUpdate(query, updates, { new: true });
     if (!updated) {
       return res.status(404).json({ error: 'Product not found.' });
     }
@@ -286,8 +324,12 @@ app.put('/api/products/:id', async (req, res) => {
 // DELETE: Delete product (soft-delete by marking inactive or hard-delete)
 app.delete('/api/products/:id', async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    const deleted = await Product.findOneAndDelete({ id });
+    const paramId = req.params.id;
+    const query = mongoose.isValidObjectId(paramId)
+      ? { $or: [{ _id: paramId }, { id: isNaN(paramId) ? null : Number(paramId) }] }
+      : { id: isNaN(paramId) ? paramId : Number(paramId) };
+
+    const deleted = await Product.findOneAndDelete(query);
     if (!deleted) {
       return res.status(404).json({ error: 'Product not found.' });
     }
@@ -468,25 +510,100 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
-// POST: Add new order
+// POST: Add new order with atomic stock decrement
 app.post('/api/orders', async (req, res) => {
   try {
     const { items, totalAmount, paymentMethod, shippingAddress, guestEmail } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Order must contain at least one item' });
+    }
+
+    const orderItems = [];
+    const stockUpdates = [];
+    let calculatedTotal = 0;
+
+    // 1. Verify all products and check stock availability
+    for (const item of items) {
+      const prodIdentifier = item.productId || item.product || item.id || item._id;
+      if (!prodIdentifier) {
+        return res.status(400).json({ error: 'Order item is missing product identifier' });
+      }
+
+      let product = null;
+      if (mongoose.isValidObjectId(prodIdentifier)) {
+        product = await Product.findOne({
+          $or: [{ _id: prodIdentifier }, { id: isNaN(prodIdentifier) ? null : Number(prodIdentifier) }]
+        });
+      } else if (!isNaN(prodIdentifier)) {
+        product = await Product.findOne({ id: Number(prodIdentifier) });
+      } else {
+        product = await Product.findOne({ id: prodIdentifier });
+      }
+
+      if (!product) {
+        return res.status(404).json({ error: `Product ${prodIdentifier} not found` });
+      }
+
+      const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      if (product.stock < qty) {
+        return res.status(400).json({
+          error: `Insufficient stock for "${product.title}". Requested: ${qty}, Available: ${product.stock}`
+        });
+      }
+
+      const itemPrice = Number(item.price) || product.price || 0;
+      calculatedTotal += itemPrice * qty;
+
+      orderItems.push({
+        productId: product.id,
+        productRef: product._id,
+        title: product.title,
+        price: itemPrice,
+        quantity: qty,
+        storage: item.storage || product.storage || 'Standard'
+      });
+
+      stockUpdates.push({
+        productId: product._id,
+        title: product.title,
+        qty
+      });
+    }
+
+    // 2. Atomically decrement stock in MongoDB
+    const decrementedList = [];
+    for (const update of stockUpdates) {
+      const updatedProduct = await Product.findOneAndUpdate(
+        { _id: update.productId, stock: { $gte: update.qty } },
+        { $inc: { stock: -update.qty, sold: update.qty } },
+        { new: true }
+      );
+
+      if (!updatedProduct) {
+        // Rollback any earlier decremented items
+        for (const done of decrementedList) {
+          await Product.findByIdAndUpdate(done.id, { $inc: { stock: done.qty, sold: -done.qty } });
+        }
+        return res.status(400).json({
+          error: `Insufficient stock for "${update.title}". Could not complete atomic decrement.`
+        });
+      }
+
+      decrementedList.push({ id: update.productId, qty: update.qty });
+    }
+
+    const finalAmount = Number(totalAmount) || calculatedTotal;
+
     const newOrder = new Order({
-      items: items.map(i => ({
-        productId: i.productId,
-        title: i.title,
-        price: i.price,
-        quantity: i.quantity,
-        storage: i.storage || 'Standard'
-      })),
-      totalAmount,
+      items: orderItems,
+      totalAmount: finalAmount,
       paymentMethod: paymentMethod || 'whatsapp',
-      shippingAddress,
+      shippingAddress: shippingAddress || {},
       guestEmail: guestEmail || 'customer@centstores.co.ke',
       status: 'pending',
       isPaid: false
     });
+
     const saved = await newOrder.save();
     res.status(201).json(saved);
   } catch (err) {
