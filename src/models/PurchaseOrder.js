@@ -54,7 +54,6 @@ const purchaseOrderSchema = new Schema({
   timestamps: true
 });
 
-purchaseOrderSchema.index({ poNumber: 1 });
 purchaseOrderSchema.index({ vendor: 1 });
 purchaseOrderSchema.index({ warehouse: 1 });
 purchaseOrderSchema.index({ status: 1 });

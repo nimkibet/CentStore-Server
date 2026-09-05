@@ -52,7 +52,6 @@ const vendorSchema = new Schema({
   timestamps: true
 });
 
-vendorSchema.index({ vendorCode: 1 });
 vendorSchema.index({ email: 1 });
 vendorSchema.index({ status: 1 });
 

@@ -60,7 +60,6 @@ const accountsPayableSchema = new Schema(
   }
 );
 
-accountsPayableSchema.index({ billNumber: 1 });
 accountsPayableSchema.index({ status: 1 });
 
 const AccountsPayable = mongoose.model('AccountsPayable', accountsPayableSchema);

@@ -42,7 +42,6 @@ const warehouseSchema = new Schema({
   timestamps: true
 });
 
-warehouseSchema.index({ code: 1 });
 warehouseSchema.index({ status: 1 });
 
 const Warehouse = mongoose.model('Warehouse', warehouseSchema);

@@ -60,7 +60,6 @@ const accountsReceivableSchema = new Schema(
   }
 );
 
-accountsReceivableSchema.index({ invoiceNumber: 1 });
 accountsReceivableSchema.index({ status: 1 });
 
 const AccountsReceivable = mongoose.model('AccountsReceivable', accountsReceivableSchema);
